@@ -1,0 +1,168 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: job_finder_app
+    environment:
+      - DB_DRIVER=postgres
+      - DB_SOURCE=postgresql://devuser:admin@db:5432/job_finder_db?sslmode=disable
+      - SERVER_ADDRESS=0.0.0.0:8080
+      - BASE_URL=/api/v1
+      - ELASTICSEARCH_ADDRESS=http://elasticsearch:9200
+      - TOKEN_SYMMETRIC_KEY=12345678901234567890123456789012
+      - ACCESS_TOKEN_DURATION=24h
+      - REDIS_ADDRESS=redis:6379
+      - EMAIL_SENDER_ADDRESS=olimpashe@gmail.com
+      - RABBITMQ_USER=devuser
+      - RABBITMQ_PASSWORD=admin
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - es-job-finder
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - dev-db-data:/var/lib/postgresql/data
+    container_name: job_finder_db
+    environment:
+      - POSTGRES_DB=job_finder_db
+      - POSTGRES_USER=devuser
+      - POSTGRES_PASSWORD=admin
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devuser -d job_finder_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - es-job-finder
+
+  elasticsearch:
+    container_name: job_finder_es
+    image: elasticsearch:7.17.9
+    environment:
+      - bootstrap.memory_lock=true
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - cluster.name=job-search-esearch
+      - discovery.type=single-node
+      - node.name=job-search-es-node
+    ulimits:
+      memlock:
+        hard: -1
+        soft: -1
+    ports:
+      - "9200:9200"
+    networks:
+      - es-job-finder
+    healthcheck:
+      interval: 10s
+      retries: 20
+      test: curl -s http://localhost:9200/_cluster/health | grep -vq '"status":"red"'
+    depends_on:
+      - db
+
+  kibana:
+    image: kibana:7.17.10
+    container_name: job_finder_kibana
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    networks:
+      - es-job-finder
+    healthcheck:
+      interval: 10s
+      retries: 20
+      test: curl --write-out 'HTTP %{http_code}' --fail --silent --output /dev/null http://localhost:5601/api/status
+
+  redis:
+    image: redis:7.0
+    container_name: job_finder_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - es-job-finder
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: job_finder_mailhog
+    logging:
+      driver: 'none'
+    ports:
+      - "1025:1025" # smtp server
+      - "8025:8025" # web ui
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: job_finder_rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=devuser
+      - RABBITMQ_DEFAULT_PASS=admin
+    ports:
+      - "5672:5672"   # AMQP protocol port
+      - "15672:15672" # Management UI port
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - es-job-finder
+
+  notification-bot:
+    build:
+      context: .
+      dockerfile: notification/Dockerfile
+    container_name: job_finder_notification_bot
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=devuser
+      - RABBITMQ_PASSWORD=admin
+      - RABBITMQ_QUEUE=telegram_notifications
+      - BOT_TOKEN=${BOT_TOKEN}
+      - WEBHOOK_HOST=${WEBHOOK_HOST}
+      - WEBHOOK_PATH=/webhook
+      - WEBHOOK_PORT=8443
+    ports:
+      - "8443:8443"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - es-job-finder
+    restart: unless-stopped
+
+networks:
+  es-job-finder:
+    driver: bridge
+
+volumes:
+  dev-db-data:
+  rabbitmq_data:
