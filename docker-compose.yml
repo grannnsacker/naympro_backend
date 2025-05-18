@@ -1,38 +1,6 @@
 version: "3.9"
 
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: job_finder_app
-    environment:
-      - DB_DRIVER=postgres
-      - DB_SOURCE=postgresql://devuser:admin@db:5432/job_finder_db?sslmode=disable
-      - SERVER_ADDRESS=0.0.0.0:8080
-      - BASE_URL=/api/v1
-      - ELASTICSEARCH_ADDRESS=http://elasticsearch:9200
-      - TOKEN_SYMMETRIC_KEY=12345678901234567890123456789012
-      - ACCESS_TOKEN_DURATION=24h
-      - REDIS_ADDRESS=redis:6379
-      - EMAIL_SENDER_ADDRESS=olimpashe@gmail.com
-      - RABBITMQ_USER=devuser
-      - RABBITMQ_PASSWORD=admin
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_PORT=5672
-    ports:
-      - "8080:8080"
-    depends_on:
-      db:
-        condition: service_healthy
-      elasticsearch:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - es-job-finder
-    restart: unless-stopped
-
   db:
     image: postgres:15-alpine
     volumes:
@@ -76,24 +44,6 @@ services:
     depends_on:
       - db
 
-  kibana:
-    image: kibana:7.17.10
-    container_name: job_finder_kibana
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    environment:
-      ELASTICSEARCH_URL: http://elasticsearch:9200
-      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
-    ports:
-      - "5601:5601"
-    networks:
-      - es-job-finder
-    healthcheck:
-      interval: 10s
-      retries: 20
-      test: curl --write-out 'HTTP %{http_code}' --fail --silent --output /dev/null http://localhost:5601/api/status
-
   redis:
     image: redis:7.0
     container_name: job_finder_redis
@@ -107,14 +57,6 @@ services:
     networks:
       - es-job-finder
 
-  mailhog:
-    image: mailhog/mailhog
-    container_name: job_finder_mailhog
-    logging:
-      driver: 'none'
-    ports:
-      - "1025:1025" # smtp server
-      - "8025:8025" # web ui
 
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
@@ -135,24 +77,54 @@ services:
     networks:
       - es-job-finder
 
-  notification-bot:
+#  notification-bot:
+#    build:
+#      context: .
+#      dockerfile: notification/Dockerfile
+#    container_name: job_finder_notification_bot
+#    environment:
+#      - RABBITMQ_HOST=rabbitmq
+#      - RABBITMQ_PORT=5672
+#      - RABBITMQ_USER=devuser
+#      - RABBITMQ_PASSWORD=admin
+#      - RABBITMQ_QUEUE=telegram_notifications
+#      - BOT_TOKEN=${BOT_TOKEN}
+#      - WEBHOOK_HOST=${WEBHOOK_HOST}
+#      - WEBHOOK_PATH=/webhook
+#      - WEBHOOK_PORT=80
+#    ports:
+#      - "80:80"
+#    depends_on:
+#      rabbitmq:
+#        condition: service_healthy
+#    networks:
+#      - es-job-finder
+#    restart: unless-stopped
+
+  app:
     build:
       context: .
-      dockerfile: notification/Dockerfile
-    container_name: job_finder_notification_bot
+      dockerfile: Dockerfile
+    container_name: job_finder_app
     environment:
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_PORT=5672
+      - DB_DRIVER=postgres
+      - DB_SOURCE=postgresql://devuser:admin@db:5432/job_finder_db?sslmode=disable
+      - SERVER_ADDRESS=0.0.0.0:8080
+      - BASE_URL=/api/v1
+      - ELASTICSEARCH_ADDRESS=http://elasticsearch:9200
+      - TOKEN_SYMMETRIC_KEY=12345678901234567890123456789012
+      - ACCESS_TOKEN_DURATION=24h
+      - REDIS_ADDRESS=redis:6379
+      - EMAIL_SENDER_ADDRESS=olimpashe@gmail.com
       - RABBITMQ_USER=devuser
       - RABBITMQ_PASSWORD=admin
-      - RABBITMQ_QUEUE=telegram_notifications
-      - BOT_TOKEN=${BOT_TOKEN}
-      - WEBHOOK_HOST=${WEBHOOK_HOST}
-      - WEBHOOK_PATH=/webhook
-      - WEBHOOK_PORT=8443
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
     ports:
-      - "8443:8443"
+      - "8080:8080"
     depends_on:
+      elasticsearch:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     networks:

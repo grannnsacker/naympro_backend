@@ -27,17 +27,31 @@ async def cmd_start(message: types.Message):
     logger.info(f"Received /start command from user {message.from_user.id}")
     await message.answer("Привет! Я бот для уведомление сервиса НайкPro")
 
-async def on_startup(bot: Bot) -> None:
+async def on_startup(application: web.Application) -> None:
     # Set webhook
     webhook_url = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
     logger.info(f"Setting webhook to {webhook_url}")
+    
+    # Remove any existing webhook first
+    await bot.delete_webhook(drop_pending_updates=True)
+    
+    # Set new webhook
     await bot.set_webhook(
         url=webhook_url,
-        drop_pending_updates=True
+        drop_pending_updates=True,
+        allowed_updates=["message", "callback_query"]
     )
-    logger.info("Webhook set successfully")
+    
+    # Verify webhook was set
+    webhook_info = await bot.get_webhook_info()
+    logger.info(f"Webhook info: {webhook_info}")
+    
+    if webhook_info.url != webhook_url:
+        logger.error(f"Webhook URL mismatch! Expected: {webhook_url}, Got: {webhook_info.url}")
+    else:
+        logger.info("Webhook set successfully")
 
-async def on_shutdown(bot: Bot) -> None:
+async def on_shutdown(application: web.Application) -> None:
     # Remove webhook
     logger.info("Removing webhook...")
     await bot.delete_webhook()
@@ -55,15 +69,17 @@ async def main():
     try:
         logger.info("Starting main application...")
         
-        # Create webhook handler
+        # Create web application
+        app = web.Application()
+        
+        # Setup webhook handler
         webhook_handler = SimpleRequestHandler(
             dispatcher=dp,
             bot=bot,
         )
-        
-        # Create web application
-        app = web.Application()
         webhook_handler.register(app, path=WEBHOOK_PATH)
+        
+        # Setup application
         setup_application(app, dp, bot=bot)
         
         # Register startup and shutdown handlers
