@@ -4,16 +4,13 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"github.com/aalug/job-finder-go/internal/db/mock"
-	db "github.com/aalug/job-finder-go/internal/db/sqlc"
-	"github.com/aalug/job-finder-go/internal/worker"
-	mockworker "github.com/aalug/job-finder-go/internal/worker/mock"
-	"github.com/aalug/job-finder-go/pkg/token"
-	utils "github.com/aalug/job-finder-go/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/mock/gomock"
+	"github.com/grannnsacker/job-finder-back/internal/db/mock"
+	db "github.com/grannnsacker/job-finder-back/internal/db/sqlc"
+	"github.com/grannnsacker/job-finder-back/pkg/token"
+	"github.com/grannnsacker/job-finder-back/pkg/utils"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"io"
@@ -83,13 +80,13 @@ func TestCreateUserAPI(t *testing.T) {
 	testCases := []struct {
 		name          string
 		body          gin.H
-		buildStubs    func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor)
+		buildStubs    func(store *mockdb.MockStore)
 		checkResponse func(recorder *httptest.ResponseRecorder)
 	}{
 		{
 			name: "OK",
 			body: requestBody,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
+			buildStubs: func(store *mockdb.MockStore) {
 				params := db.CreateUserTxParams{
 					CreateUserParams: db.CreateUserParams{
 						FullName:         user.FullName,
@@ -112,13 +109,6 @@ func TestCreateUserAPI(t *testing.T) {
 					CreateMultipleUserSkills(gomock.Any(), gomock.Eq(createUserSkills), gomock.Eq(user.ID)).
 					Times(1).
 					Return(userSkills, nil)
-				taskPayload := &worker.PayloadSendVerificationEmail{
-					Email: user.Email,
-				}
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), taskPayload, gomock.Any()).
-					Times(1).
-					Return(nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusCreated, recorder.Code)
@@ -134,15 +124,12 @@ func TestCreateUserAPI(t *testing.T) {
 				"location":           user.Location,
 				"skills":             skills,
 			},
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
+			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					CreateUserTx(gomock.Any(), gomock.Any()).
 					Times(0)
 				store.EXPECT().
 					CreateMultipleUserSkills(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(0)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -164,15 +151,12 @@ func TestCreateUserAPI(t *testing.T) {
 				"location":           user.Location,
 				"skills":             skills,
 			},
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
+			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					CreateUserTx(gomock.Any(), gomock.Any()).
 					Times(0)
 				store.EXPECT().
 					CreateMultipleUserSkills(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(0)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -182,16 +166,13 @@ func TestCreateUserAPI(t *testing.T) {
 		{
 			name: "Unique Violation",
 			body: requestBody,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
+			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					CreateUserTx(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(db.CreateUserTxResult{}, &pq.Error{Code: "23505"})
 				store.EXPECT().
 					CreateMultipleUserSkills(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(0)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -201,16 +182,13 @@ func TestCreateUserAPI(t *testing.T) {
 		{
 			name: "Internal Server Error CreateUserTx",
 			body: requestBody,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
+			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					CreateUserTx(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(db.CreateUserTxResult{}, sql.ErrConnDone)
 				store.EXPECT().
 					CreateMultipleUserSkills(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(0)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -220,7 +198,7 @@ func TestCreateUserAPI(t *testing.T) {
 		{
 			name: "Internal Server Error CreateMultipleUserSkills",
 			body: requestBody,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
+			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					CreateUserTx(gomock.Any(), gomock.Any()).
 					Times(1).
@@ -229,9 +207,6 @@ func TestCreateUserAPI(t *testing.T) {
 					CreateMultipleUserSkills(gomock.Any(), gomock.Any(), gomock.Any()).
 					Times(1).
 					Return([]db.UserSkill{}, sql.ErrConnDone)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)
@@ -246,13 +221,9 @@ func TestCreateUserAPI(t *testing.T) {
 			defer ctrl.Finish()
 			store := mockdb.NewMockStore(ctrl)
 
-			taskCtrl := gomock.NewController(t)
-			defer taskCtrl.Finish()
-			taskDistributor := mockworker.NewMockTaskDistributor(taskCtrl)
+			tc.buildStubs(store)
 
-			tc.buildStubs(store, taskDistributor)
-
-			server := newTestServer(t, store, nil, taskDistributor)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)
@@ -419,26 +390,6 @@ func TestLoginUserAPI(t *testing.T) {
 				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
-		{
-			name: "Email Not Verified",
-			body: gin.H{
-				"email":    user.Email,
-				"password": password,
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				user.IsEmailVerified = false
-				store.EXPECT().
-					GetUserByEmail(gomock.Any(), gomock.Eq(user.Email)).
-					Times(1).
-					Return(user, nil)
-				store.EXPECT().
-					ListUserSkills(gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusForbidden, recorder.Code)
-			},
-		},
 	}
 	for i := range testCases {
 		tc := testCases[i]
@@ -450,7 +401,7 @@ func TestLoginUserAPI(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store, nil, nil)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)
@@ -534,7 +485,7 @@ func TestGetUserAPI(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store, nil, nil)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			url := BaseUrl + "/users"
@@ -952,7 +903,7 @@ func TestUpdateUserAPI(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store, nil, nil)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)
@@ -1148,7 +1099,7 @@ func TestUpdateUserPasswordAPI(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store, nil, nil)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)
@@ -1297,7 +1248,7 @@ func TestDeleteUserAPI(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store, nil, nil)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			url := BaseUrl + "/users"
@@ -1336,75 +1287,16 @@ func TestVerifyUserEmailAPI(t *testing.T) {
 		checkResponse func(recorder *httptest.ResponseRecorder)
 	}{
 		{
-			name: "OK",
-			query: Query{
-				ID:   verifyEmail.ID,
-				Code: verifyEmail.SecretCode,
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				params := db.VerifyEmailTxParams{
-					ID:         verifyEmail.ID,
-					SecretCode: verifyEmail.SecretCode,
-				}
-				verifyEmail.IsUsed = true
-				user.IsEmailVerified = true
-				store.EXPECT().
-					VerifyUserEmailTx(gomock.Any(), gomock.Eq(params)).
-					Times(1).
-					Return(db.VerifyUserEmailResult{
-						User:        user,
-						VerifyEmail: verifyEmail,
-					}, nil)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
-			},
-		},
-		{
-			name: "Internal Server Error",
-			query: Query{
-				ID:   verifyEmail.ID,
-				Code: verifyEmail.SecretCode,
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					VerifyUserEmailTx(gomock.Any(), gomock.Any()).
-					Times(1).
-					Return(db.VerifyUserEmailResult{}, sql.ErrConnDone)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusInternalServerError, recorder.Code)
-			},
-		},
-		{
-			name: "Verify Email Not Found",
-			query: Query{
-				ID:   verifyEmail.ID,
-				Code: verifyEmail.SecretCode,
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					VerifyUserEmailTx(gomock.Any(), gomock.Any()).
-					Times(1).
-					Return(db.VerifyUserEmailResult{}, sql.ErrNoRows)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusNotFound, recorder.Code)
-			},
-		},
-		{
 			name: "Invalid Code Length",
 			query: Query{
 				ID:   verifyEmail.ID,
 				Code: utils.RandomString(31),
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					VerifyUserEmailTx(gomock.Any(), gomock.Any()).
-					Times(0)
+
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusBadRequest, recorder.Code)
+				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
 		},
 		{
@@ -1414,12 +1306,10 @@ func TestVerifyUserEmailAPI(t *testing.T) {
 				Code: verifyEmail.SecretCode,
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					VerifyUserEmailTx(gomock.Any(), gomock.Any()).
-					Times(0)
+
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusBadRequest, recorder.Code)
+				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
 		},
 	}
@@ -1433,7 +1323,7 @@ func TestVerifyUserEmailAPI(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store, nil, nil)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			url := BaseUrl + "/users/verify-email"
@@ -1444,190 +1334,6 @@ func TestVerifyUserEmailAPI(t *testing.T) {
 			q := req.URL.Query()
 			q.Add("id", fmt.Sprintf("%d", tc.query.ID))
 			q.Add("code", tc.query.Code)
-			req.URL.RawQuery = q.Encode()
-
-			server.router.ServeHTTP(recorder, req)
-
-			tc.checkResponse(recorder)
-		})
-	}
-}
-
-func TestSendVerificationEmailToUserAPI(t *testing.T) {
-	user, _ := generateRandomUser(t)
-	testCases := []struct {
-		name          string
-		email         string
-		buildStubs    func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor)
-		checkResponse func(recorder *httptest.ResponseRecorder)
-	}{
-		{
-			name:  "OK",
-			email: user.Email,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
-				store.EXPECT().
-					GetUserByEmail(gomock.Any(), gomock.Eq(user.Email)).
-					Times(1).
-					Return(user, nil)
-				store.EXPECT().
-					DeleteVerifyEmail(gomock.Any(), gomock.Eq(user.Email)).
-					Times(1).
-					Return(nil)
-				taskPayload := &worker.PayloadSendVerificationEmail{
-					Email: user.Email,
-				}
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Eq(taskPayload), gomock.Any()).
-					Times(1).
-					Return(nil)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
-			},
-		},
-		{
-			name:  "Invalid Email",
-			email: "invalid",
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
-				store.EXPECT().
-					GetUserByEmail(gomock.Any(), gomock.Any()).
-					Times(0)
-				store.EXPECT().
-					DeleteVerifyEmail(gomock.Any(), gomock.Any()).
-					Times(0)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusBadRequest, recorder.Code)
-			},
-		},
-		{
-			name:  "User Not Found",
-			email: user.Email,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
-				store.EXPECT().
-					GetUserByEmail(gomock.Any(), gomock.Eq(user.Email)).
-					Times(1).
-					Return(db.User{}, sql.ErrNoRows)
-				store.EXPECT().
-					DeleteVerifyEmail(gomock.Any(), gomock.Any()).
-					Times(0)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusNotFound, recorder.Code)
-			},
-		},
-		{
-			name:  "Internal Server Error GetUserByEmail",
-			email: user.Email,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
-				store.EXPECT().
-					GetUserByEmail(gomock.Any(), gomock.Eq(user.Email)).
-					Times(1).
-					Return(db.User{}, sql.ErrConnDone)
-				store.EXPECT().
-					DeleteVerifyEmail(gomock.Any(), gomock.Any()).
-					Times(0)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusInternalServerError, recorder.Code)
-			},
-		},
-		{
-			name:  "DeleteVerifyEmail ErrNoRows Do Nothing",
-			email: user.Email,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
-				store.EXPECT().
-					GetUserByEmail(gomock.Any(), gomock.Eq(user.Email)).
-					Times(1).
-					Return(user, nil)
-				store.EXPECT().
-					DeleteVerifyEmail(gomock.Any(), gomock.Eq(user.Email)).
-					Times(1).
-					Return(sql.ErrNoRows)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(1).
-					Return(nil)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
-			},
-		},
-		{
-			name:  "Internal Server Error DeleteVerifyEmail",
-			email: user.Email,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
-				store.EXPECT().
-					GetUserByEmail(gomock.Any(), gomock.Eq(user.Email)).
-					Times(1).
-					Return(user, nil)
-				store.EXPECT().
-					DeleteVerifyEmail(gomock.Any(), gomock.Eq(user.Email)).
-					Times(1).
-					Return(sql.ErrConnDone)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusInternalServerError, recorder.Code)
-			},
-		},
-		{
-			name:  "Internal Server Error DistributeTaskSendVerificationEmail",
-			email: user.Email,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
-				store.EXPECT().
-					GetUserByEmail(gomock.Any(), gomock.Eq(user.Email)).
-					Times(1).
-					Return(user, nil)
-				store.EXPECT().
-					DeleteVerifyEmail(gomock.Any(), gomock.Eq(user.Email)).
-					Times(1).
-					Return(nil)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(1).
-					Return(errors.New("some error"))
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusInternalServerError, recorder.Code)
-			},
-		},
-	}
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			store := mockdb.NewMockStore(ctrl)
-
-			taskCtrl := gomock.NewController(t)
-			defer taskCtrl.Finish()
-			taskDistributor := mockworker.NewMockTaskDistributor(taskCtrl)
-
-			tc.buildStubs(store, taskDistributor)
-
-			server := newTestServer(t, store, nil, taskDistributor)
-			recorder := httptest.NewRecorder()
-
-			url := BaseUrl + "/users/send-verification-email"
-
-			req, err := http.NewRequest(http.MethodGet, url, nil)
-			require.NoError(t, err)
-
-			q := req.URL.Query()
-			q.Add("email", tc.email)
 			req.URL.RawQuery = q.Encode()
 
 			server.router.ServeHTTP(recorder, req)

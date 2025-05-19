@@ -28,21 +28,16 @@ async def cmd_start(message: types.Message):
     await message.answer("Привет! Я бот для уведомление сервиса НайкPro")
 
 async def on_startup(application: web.Application) -> None:
-    # Set webhook
     webhook_url = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
     logger.info(f"Setting webhook to {webhook_url}")
-    
-    # Remove any existing webhook first
     await bot.delete_webhook(drop_pending_updates=True)
-    
-    # Set new webhook
+
     await bot.set_webhook(
         url=webhook_url,
         drop_pending_updates=True,
         allowed_updates=["message", "callback_query"]
     )
-    
-    # Verify webhook was set
+
     webhook_info = await bot.get_webhook_info()
     logger.info(f"Webhook info: {webhook_info}")
     
@@ -52,7 +47,6 @@ async def on_startup(application: web.Application) -> None:
         logger.info("Webhook set successfully")
 
 async def on_shutdown(application: web.Application) -> None:
-    # Remove webhook
     logger.info("Removing webhook...")
     await bot.delete_webhook()
     logger.info("Webhook removed")
@@ -68,29 +62,24 @@ async def run_consumer():
 async def main():
     try:
         logger.info("Starting main application...")
-        
-        # Create web application
+
         app = web.Application()
-        
-        # Setup webhook handler
+
         webhook_handler = SimpleRequestHandler(
             dispatcher=dp,
             bot=bot,
         )
         webhook_handler.register(app, path=WEBHOOK_PATH)
-        
-        # Setup application
+
         setup_application(app, dp, bot=bot)
-        
-        # Register startup and shutdown handlers
+
         app.on_startup.append(on_startup)
         app.on_shutdown.append(on_shutdown)
-        
-        # Start RabbitMQ consumer
+
         consumer_task = asyncio.create_task(run_consumer())
         logger.info("Consumer task created")
         
-        # Start web server
+
         logger.info(f"Starting web server on port {WEBHOOK_PORT}...")
         await web._run_app(
             app,

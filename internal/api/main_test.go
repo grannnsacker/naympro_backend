@@ -1,25 +1,25 @@
 package api
 
 import (
-	"github.com/aalug/job-finder-go/internal/config"
-	"github.com/aalug/job-finder-go/internal/db/sqlc"
-	"github.com/aalug/job-finder-go/internal/esearch"
-	"github.com/aalug/job-finder-go/internal/worker"
-	"github.com/aalug/job-finder-go/pkg/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/grannnsacker/job-finder-back/internal/config"
+	"github.com/grannnsacker/job-finder-back/internal/db/sqlc"
+	"github.com/grannnsacker/job-finder-back/internal/esearch"
+	"github.com/grannnsacker/job-finder-back/pkg/utils"
+	rabbitmq "github.com/streadway/amqp"
 	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
 	"time"
 )
 
-func newTestServer(t *testing.T, store db.Store, client esearch.ESearchClient, taskDistributor worker.TaskDistributor) *Server {
+func newTestServer(t *testing.T, store db.Store, client esearch.ESearchClient) *Server {
 	cfg := config.Config{
 		TokenSymmetricKey:   utils.RandomString(32),
 		AccessTokenDuration: time.Minute,
 	}
-
-	server, err := NewServer(cfg, store, client, taskDistributor)
+	q := rabbitmq.Queue{}
+	server, err := NewServer(cfg, store, client, nil, q)
 	require.NoError(t, err)
 
 	if client != nil {

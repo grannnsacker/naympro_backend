@@ -8,7 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	esearch "github.com/aalug/job-finder-go/internal/esearch"
+	esearch "github.com/grannnsacker/job-finder-back/internal/esearch"
 	gomock "github.com/golang/mock/gomock"
 )
 

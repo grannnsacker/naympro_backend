@@ -16,7 +16,6 @@ type Querier interface {
 	CreateJobSkill(ctx context.Context, arg CreateJobSkillParams) (JobSkill, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserSkill(ctx context.Context, arg CreateUserSkillParams) (UserSkill, error)
-	CreateVerifyEmail(ctx context.Context, arg CreateVerifyEmailParams) (VerifyEmail, error)
 	DeleteAllUserSkills(ctx context.Context, userID int32) error
 	DeleteCompany(ctx context.Context, id int32) error
 	DeleteEmployer(ctx context.Context, id int32) error
@@ -28,7 +27,6 @@ type Querier interface {
 	DeleteMultipleUserSkills(ctx context.Context, ids []int32) error
 	DeleteUser(ctx context.Context, id int32) error
 	DeleteUserSkill(ctx context.Context, id int32) error
-	DeleteVerifyEmail(ctx context.Context, email string) error
 	GetCompanyByID(ctx context.Context, id int32) (Company, error)
 	GetCompanyByName(ctx context.Context, name string) (Company, error)
 	GetCompanyIDOfJob(ctx context.Context, id int32) (int32, error)
@@ -76,9 +74,6 @@ type Querier interface {
 	UpdatePassword(ctx context.Context, arg UpdatePasswordParams) error
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserSkill(ctx context.Context, arg UpdateUserSkillParams) (UserSkill, error)
-	UpdateVerifyEmail(ctx context.Context, arg UpdateVerifyEmailParams) (VerifyEmail, error)
-	VerifyEmployerEmail(ctx context.Context, email string) (Employer, error)
-	VerifyUserEmail(ctx context.Context, email string) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

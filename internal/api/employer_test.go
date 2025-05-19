@@ -4,16 +4,13 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"github.com/aalug/job-finder-go/internal/db/mock"
-	db "github.com/aalug/job-finder-go/internal/db/sqlc"
-	"github.com/aalug/job-finder-go/internal/worker"
-	mockworker "github.com/aalug/job-finder-go/internal/worker/mock"
-	"github.com/aalug/job-finder-go/pkg/token"
-	"github.com/aalug/job-finder-go/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/mock/gomock"
+	"github.com/grannnsacker/job-finder-back/internal/db/mock"
+	db "github.com/grannnsacker/job-finder-back/internal/db/sqlc"
+	"github.com/grannnsacker/job-finder-back/pkg/token"
+	"github.com/grannnsacker/job-finder-back/pkg/utils"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"io"
@@ -73,13 +70,13 @@ func TestCreateEmployerAPI(t *testing.T) {
 	testCases := []struct {
 		name          string
 		body          gin.H
-		buildStubs    func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor)
+		buildStubs    func(store *mockdb.MockStore)
 		checkResponse func(recorder *httptest.ResponseRecorder)
 	}{
 		{
 			name: "OK",
 			body: requestBody,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
+			buildStubs: func(store *mockdb.MockStore) {
 				companyParams := db.CreateCompanyParams{
 					Name:     company.Name,
 					Industry: company.Industry,
@@ -103,13 +100,6 @@ func TestCreateEmployerAPI(t *testing.T) {
 					Return(db.CreateEmployerTxResult{
 						Employer: employer,
 					}, nil)
-				taskPayload := &worker.PayloadSendVerificationEmail{
-					Email: employer.Email,
-				}
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), taskPayload, gomock.Any()).
-					Times(1).
-					Return(nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusCreated, recorder.Code)
@@ -123,15 +113,12 @@ func TestCreateEmployerAPI(t *testing.T) {
 				"full_name": "full name",
 				"password":  "password",
 			},
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
+			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					CreateCompany(gomock.Any(), gomock.Any()).
 					Times(0)
 				store.EXPECT().
 					CreateEmployerTx(gomock.Any(), gomock.Any()).
-					Times(0)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -141,16 +128,13 @@ func TestCreateEmployerAPI(t *testing.T) {
 		{
 			name: "Company Name Already Exists",
 			body: requestBody,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
+			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					CreateCompany(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(db.Company{}, &pq.Error{Code: "23505"})
 				store.EXPECT().
 					CreateEmployerTx(gomock.Any(), gomock.Any()).
-					Times(0)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -160,16 +144,13 @@ func TestCreateEmployerAPI(t *testing.T) {
 		{
 			name: "Internal Server Error CreateCompany",
 			body: requestBody,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
+			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					CreateCompany(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(db.Company{}, sql.ErrConnDone)
 				store.EXPECT().
 					CreateEmployerTx(gomock.Any(), gomock.Any()).
-					Times(0)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -179,7 +160,7 @@ func TestCreateEmployerAPI(t *testing.T) {
 		{
 			name: "Employer Email Already Exists",
 			body: requestBody,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
+			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					CreateCompany(gomock.Any(), gomock.Any()).
 					Times(1).
@@ -188,9 +169,6 @@ func TestCreateEmployerAPI(t *testing.T) {
 					CreateEmployerTx(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(db.CreateEmployerTxResult{}, &pq.Error{Code: "23505"})
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusForbidden, recorder.Code)
@@ -199,7 +177,7 @@ func TestCreateEmployerAPI(t *testing.T) {
 		{
 			name: "Internal Server Error CreateEmployerTx",
 			body: requestBody,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
+			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					CreateCompany(gomock.Any(), gomock.Any()).
 					Times(1).
@@ -208,9 +186,6 @@ func TestCreateEmployerAPI(t *testing.T) {
 					CreateEmployerTx(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(db.CreateEmployerTxResult{}, sql.ErrConnDone)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)
@@ -225,13 +200,9 @@ func TestCreateEmployerAPI(t *testing.T) {
 			defer ctrl.Finish()
 			store := mockdb.NewMockStore(ctrl)
 
-			taskCtrl := gomock.NewController(t)
-			defer taskCtrl.Finish()
-			taskDistributor := mockworker.NewMockTaskDistributor(taskCtrl)
+			tc.buildStubs(store)
 
-			tc.buildStubs(store, taskDistributor)
-
-			server := newTestServer(t, store, nil, taskDistributor)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)
@@ -411,26 +382,6 @@ func TestLoginEmployerAPI(t *testing.T) {
 				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
-		{
-			name: "Email Not Verified",
-			body: gin.H{
-				"email":    employer.Email,
-				"password": password,
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				employer.IsEmailVerified = false
-				store.EXPECT().
-					GetEmployerByEmail(gomock.Any(), gomock.Eq(employer.Email)).
-					Times(1).
-					Return(employer, nil)
-				store.EXPECT().
-					GetCompanyByID(gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusForbidden, recorder.Code)
-			},
-		},
 	}
 	for i := range testCases {
 		tc := testCases[i]
@@ -442,7 +393,7 @@ func TestLoginEmployerAPI(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store, nil, nil)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)
@@ -555,7 +506,7 @@ func TestGetEmployerAPI(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store, nil, nil)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			url := BaseUrl + "/employers"
@@ -841,7 +792,7 @@ func TestUpdateEmployerAPI(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store, nil, nil)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)
@@ -1037,7 +988,7 @@ func TestUpdateEmployerPasswordAPI(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store, nil, nil)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)
@@ -1187,7 +1138,7 @@ func TestDeleteEmployerAPI(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store, nil, nil)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			url := BaseUrl + "/employers"
@@ -1370,7 +1321,7 @@ func TestGetUserAsEmployerAPI(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store, nil, nil)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			url := BaseUrl + "/employers/user-details/" + tc.userEmail
@@ -1467,7 +1418,7 @@ func TestGetEmployerAndCompanyDetailsAPI(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store, nil, nil)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			url := BaseUrl + "/employers/employer-company-details/" + tc.employerEmail
@@ -1504,57 +1455,13 @@ func TestVerifyEmployerEmailAPI(t *testing.T) {
 		checkResponse func(recorder *httptest.ResponseRecorder)
 	}{
 		{
-			name: "OK",
-			query: Query{
-				ID:   verifyEmail.ID,
-				Code: verifyEmail.SecretCode,
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				params := db.VerifyEmailTxParams{
-					ID:         verifyEmail.ID,
-					SecretCode: verifyEmail.SecretCode,
-				}
-				verifyEmail.IsUsed = true
-				employer.IsEmailVerified = true
-				store.EXPECT().
-					VerifyEmployerEmailTx(gomock.Any(), gomock.Eq(params)).
-					Times(1).
-					Return(db.VerifyEmployerEmailResult{
-						Employer:    employer,
-						VerifyEmail: verifyEmail,
-					}, nil)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
-			},
-		},
-		{
 			name: "Internal Server Error",
 			query: Query{
 				ID:   verifyEmail.ID,
 				Code: verifyEmail.SecretCode,
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					VerifyEmployerEmailTx(gomock.Any(), gomock.Any()).
-					Times(1).
-					Return(db.VerifyEmployerEmailResult{}, sql.ErrConnDone)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusInternalServerError, recorder.Code)
-			},
-		},
-		{
-			name: "Verify Email Not Found",
-			query: Query{
-				ID:   verifyEmail.ID,
-				Code: verifyEmail.SecretCode,
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					VerifyEmployerEmailTx(gomock.Any(), gomock.Any()).
-					Times(1).
-					Return(db.VerifyEmployerEmailResult{}, sql.ErrNoRows)
+
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -1567,12 +1474,10 @@ func TestVerifyEmployerEmailAPI(t *testing.T) {
 				Code: utils.RandomString(31),
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					VerifyEmployerEmailTx(gomock.Any(), gomock.Any()).
-					Times(0)
+
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusBadRequest, recorder.Code)
+				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
 		},
 		{
@@ -1582,12 +1487,10 @@ func TestVerifyEmployerEmailAPI(t *testing.T) {
 				Code: verifyEmail.SecretCode,
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					VerifyEmployerEmailTx(gomock.Any(), gomock.Any()).
-					Times(0)
+
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusBadRequest, recorder.Code)
+				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
 		},
 	}
@@ -1601,7 +1504,7 @@ func TestVerifyEmployerEmailAPI(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store, nil, nil)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			url := BaseUrl + "/employers/verify-email"
@@ -1612,190 +1515,6 @@ func TestVerifyEmployerEmailAPI(t *testing.T) {
 			q := req.URL.Query()
 			q.Add("id", fmt.Sprintf("%d", tc.query.ID))
 			q.Add("code", tc.query.Code)
-			req.URL.RawQuery = q.Encode()
-
-			server.router.ServeHTTP(recorder, req)
-
-			tc.checkResponse(recorder)
-		})
-	}
-}
-
-func TestSendVerificationEmailToEmployerAPI(t *testing.T) {
-	employer, _, _ := generateRandomEmployerAndCompany(t)
-	testCases := []struct {
-		name          string
-		email         string
-		buildStubs    func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor)
-		checkResponse func(recorder *httptest.ResponseRecorder)
-	}{
-		{
-			name:  "OK",
-			email: employer.Email,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
-				store.EXPECT().
-					GetEmployerByEmail(gomock.Any(), gomock.Eq(employer.Email)).
-					Times(1).
-					Return(employer, nil)
-				store.EXPECT().
-					DeleteVerifyEmail(gomock.Any(), gomock.Eq(employer.Email)).
-					Times(1).
-					Return(nil)
-				taskPayload := &worker.PayloadSendVerificationEmail{
-					Email: employer.Email,
-				}
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Eq(taskPayload), gomock.Any()).
-					Times(1).
-					Return(nil)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
-			},
-		},
-		{
-			name:  "Invalid Email",
-			email: "invalid",
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
-				store.EXPECT().
-					GetEmployerByEmail(gomock.Any(), gomock.Any()).
-					Times(0)
-				store.EXPECT().
-					DeleteVerifyEmail(gomock.Any(), gomock.Any()).
-					Times(0)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusBadRequest, recorder.Code)
-			},
-		},
-		{
-			name:  "Employer Not Found",
-			email: employer.Email,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
-				store.EXPECT().
-					GetEmployerByEmail(gomock.Any(), gomock.Eq(employer.Email)).
-					Times(1).
-					Return(db.Employer{}, sql.ErrNoRows)
-				store.EXPECT().
-					DeleteVerifyEmail(gomock.Any(), gomock.Any()).
-					Times(0)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusNotFound, recorder.Code)
-			},
-		},
-		{
-			name:  "Internal Server Error GetEmployerByEmail",
-			email: employer.Email,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
-				store.EXPECT().
-					GetEmployerByEmail(gomock.Any(), gomock.Eq(employer.Email)).
-					Times(1).
-					Return(db.Employer{}, sql.ErrConnDone)
-				store.EXPECT().
-					DeleteVerifyEmail(gomock.Any(), gomock.Any()).
-					Times(0)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusInternalServerError, recorder.Code)
-			},
-		},
-		{
-			name:  "DeleteVerifyEmail ErrNoRows Do Nothing",
-			email: employer.Email,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
-				store.EXPECT().
-					GetEmployerByEmail(gomock.Any(), gomock.Eq(employer.Email)).
-					Times(1).
-					Return(employer, nil)
-				store.EXPECT().
-					DeleteVerifyEmail(gomock.Any(), gomock.Eq(employer.Email)).
-					Times(1).
-					Return(sql.ErrNoRows)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(1).
-					Return(nil)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
-			},
-		},
-		{
-			name:  "Internal Server Error DeleteVerifyEmail",
-			email: employer.Email,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
-				store.EXPECT().
-					GetEmployerByEmail(gomock.Any(), gomock.Eq(employer.Email)).
-					Times(1).
-					Return(employer, nil)
-				store.EXPECT().
-					DeleteVerifyEmail(gomock.Any(), gomock.Eq(employer.Email)).
-					Times(1).
-					Return(sql.ErrConnDone)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusInternalServerError, recorder.Code)
-			},
-		},
-		{
-			name:  "Internal Server Error DistributeTaskSendVerificationEmail",
-			email: employer.Email,
-			buildStubs: func(store *mockdb.MockStore, distributor *mockworker.MockTaskDistributor) {
-				store.EXPECT().
-					GetEmployerByEmail(gomock.Any(), gomock.Eq(employer.Email)).
-					Times(1).
-					Return(employer, nil)
-				store.EXPECT().
-					DeleteVerifyEmail(gomock.Any(), gomock.Eq(employer.Email)).
-					Times(1).
-					Return(nil)
-				distributor.EXPECT().
-					DistributeTaskSendVerificationEmail(gomock.Any(), gomock.Any(), gomock.Any()).
-					Times(1).
-					Return(errors.New("some error"))
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusInternalServerError, recorder.Code)
-			},
-		},
-	}
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-			store := mockdb.NewMockStore(ctrl)
-
-			taskCtrl := gomock.NewController(t)
-			defer taskCtrl.Finish()
-			taskDistributor := mockworker.NewMockTaskDistributor(taskCtrl)
-
-			tc.buildStubs(store, taskDistributor)
-
-			server := newTestServer(t, store, nil, taskDistributor)
-			recorder := httptest.NewRecorder()
-
-			url := BaseUrl + "/employers/send-verification-email"
-
-			req, err := http.NewRequest(http.MethodGet, url, nil)
-			require.NoError(t, err)
-
-			q := req.URL.Query()
-			q.Add("email", tc.email)
 			req.URL.RawQuery = q.Encode()
 
 			server.router.ServeHTTP(recorder, req)

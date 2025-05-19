@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	db "github.com/aalug/job-finder-go/internal/db/sqlc"
-	"github.com/aalug/job-finder-go/internal/esearch"
-	"github.com/aalug/job-finder-go/pkg/token"
 	"github.com/gin-gonic/gin"
+	db "github.com/grannnsacker/job-finder-back/internal/db/sqlc"
+	"github.com/grannnsacker/job-finder-back/internal/esearch"
+	"github.com/grannnsacker/job-finder-back/pkg/token"
 	"net/http"
 )
 
@@ -457,9 +457,7 @@ func (server *Server) getJob(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, errorResponse(err))
 		return
 	}
-	fmt.Println(request.ID)
 	job, err := server.store.GetJobDetails(ctx, request.ID)
-	fmt.Println(job, err)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			ctx.JSON(http.StatusNotFound, errorResponse(err))

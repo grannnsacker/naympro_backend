@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"fmt"
 )
 
 type CreateUserTxParams struct {
@@ -15,7 +14,6 @@ type CreateUserTxResult struct {
 }
 
 func (store *SQLStore) CreateUserTx(ctx context.Context, arg CreateUserTxParams) (CreateUserTxResult, error) {
-	fmt.Println("CreateUserTx")
 	var result CreateUserTxResult
 
 	err := store.ExecTx(ctx, func(q *Queries) error {
@@ -25,10 +23,7 @@ func (store *SQLStore) CreateUserTx(ctx context.Context, arg CreateUserTxParams)
 		if err != nil {
 			return err
 		}
-		fmt.Println(result.User)
-		fmt.Println("|", arg.AfterCreate, "|")
 		return arg.AfterCreate(result.User)
 	})
-	fmt.Println("CreateUserTx2")
 	return result, err
 }

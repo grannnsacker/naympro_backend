@@ -17,8 +17,6 @@ type Store interface {
 	CreateUserTx(ctx context.Context, arg CreateUserTxParams) (CreateUserTxResult, error)
 	CreateEmployerTx(ctx context.Context, arg CreateEmployerTxParams) (CreateEmployerTxResult, error)
 	ExecTx(ctx context.Context, fn func(*Queries) error) error
-	VerifyUserEmailTx(ctx context.Context, arg VerifyEmailTxParams) (VerifyUserEmailResult, error)
-	VerifyEmployerEmailTx(ctx context.Context, arg VerifyEmailTxParams) (VerifyEmployerEmailResult, error)
 	CreateJobApplicationTx(ctx context.Context, arg CreateJobApplicationTxParams) (CreateJobApplicationTxResult, error)
 	LoadTestData(ctx context.Context)
 }

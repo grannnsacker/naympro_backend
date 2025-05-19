@@ -2,8 +2,8 @@ package db
 
 import (
 	"context"
-	"github.com/aalug/job-finder-go/pkg/utils"
 	"github.com/bxcodec/faker/v3"
+	"github.com/grannnsacker/job-finder-back/pkg/utils"
 	"log"
 	"sync"
 	"sync/atomic"

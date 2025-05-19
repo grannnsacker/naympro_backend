@@ -3,13 +3,12 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
-	db "github.com/aalug/job-finder-go/internal/db/sqlc"
-	"github.com/aalug/job-finder-go/pkg/token"
-	"github.com/aalug/job-finder-go/pkg/utils"
-	"github.com/aalug/job-finder-go/pkg/validation"
 	"github.com/gin-gonic/gin"
+	db "github.com/grannnsacker/job-finder-back/internal/db/sqlc"
+	"github.com/grannnsacker/job-finder-back/pkg/token"
+	"github.com/grannnsacker/job-finder-back/pkg/utils"
+	"github.com/grannnsacker/job-finder-back/pkg/validation"
 	"github.com/lib/pq"
 	"net/http"
 	"time"
@@ -561,77 +560,4 @@ func (server *Server) getEmployerAndCompanyDetails(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, details)
-}
-
-type verifyEmployerEmailRequest struct {
-	ID         int64  `form:"id" binding:"required,min=1"`
-	SecretCode string `form:"code" binding:"required,min=32"`
-}
-
-type verifyEmployerEmailResponse struct {
-	Message string `json:"message"`
-}
-
-// @Schemes
-// @Summary Verify employer email
-// @Description Verify employer email by providing verify email ID and secret code that should be sent to the user in the verification email.
-// @Tags employers
-// @Produce json
-// @param VerifyEmployerEmailRequest query verifyEmployerEmailRequest true "Verify email ID and secret code from the email."
-// @Success 200 {object} verifyEmployerEmailResponse
-// @Failure 400 {object} ErrorResponse "Invalid request body."
-// @Failure 500 {object} ErrorResponse "Any other error."
-// @Router /employers/verify-email [get]
-// verifyEmployerEmail handles employer email verification
-func (server *Server) verifyEmployerEmail(ctx *gin.Context) {
-	var request verifyEmployerEmailRequest
-	if err := ctx.ShouldBindQuery(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, errorResponse(err))
-		return
-	}
-
-	txResult, err := server.store.VerifyEmployerEmailTx(ctx, db.VerifyEmailTxParams{
-		ID:         request.ID,
-		SecretCode: request.SecretCode,
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			err = fmt.Errorf("no veirdy email found with the provided details. The verify email may have expired or been used already")
-			ctx.JSON(http.StatusNotFound, errorResponse(err))
-			return
-		}
-
-		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
-		return
-	}
-
-	if txResult.Employer.IsEmailVerified {
-		ctx.JSON(http.StatusOK, verifyEmployerEmailResponse{Message: "Successfully verified email"})
-	}
-}
-
-type sendVerificationEmailToEmployerRequest struct {
-	Email string `form:"email" binding:"required,email"`
-}
-
-type sendVerificationEmailToEmployerResponse struct {
-	Message string `json:"message"`
-}
-
-// @Schemes
-// @Summary Send employer verification email
-// @Description Send to the employer an email with a link that should be used to verify their email address.
-// @Tags employers
-// @Param SendVerificationEmailToEmployerRequest query sendVerificationEmailToEmployerRequest true "Email address to send verification email to"
-// @Produce json
-// @Success 200 {object} sendVerificationEmailToEmployerResponse
-// @Failure 400 {object} ErrorResponse "Invalid Email."
-// @Failure 404 {object} ErrorResponse "No employer found with the provided email."
-// @Failure 500 {object} ErrorResponse "Any other error."
-// @Router /employers/send-verification-email [get]
-// sendVerificationEmailToEmployer sends verification email to the employer.
-// it supposed to help employers that for some reason could not verify
-// their email address with link provided in the first verification email.
-func (server *Server) sendVerificationEmailToEmployer(ctx *gin.Context) {
-
 }

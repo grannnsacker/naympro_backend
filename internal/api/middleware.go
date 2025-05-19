@@ -3,8 +3,8 @@ package api
 import (
 	"errors"
 	"fmt"
-	"github.com/aalug/job-finder-go/pkg/token"
 	"github.com/gin-gonic/gin"
+	"github.com/grannnsacker/job-finder-back/pkg/token"
 	"net/http"
 	"strings"
 )

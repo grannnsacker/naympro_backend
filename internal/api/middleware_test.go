@@ -2,8 +2,8 @@ package api
 
 import (
 	"fmt"
-	"github.com/aalug/job-finder-go/pkg/token"
 	"github.com/gin-gonic/gin"
+	"github.com/grannnsacker/job-finder-back/pkg/token"
 	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
@@ -79,7 +79,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			server := newTestServer(t, nil, nil, nil) // nil because for middleware tests db is not needed
+			server := newTestServer(t, nil, nil) // nil because for middleware tests db is not needed
 			authPath := "/auth"
 			server.router.GET(
 				authPath,

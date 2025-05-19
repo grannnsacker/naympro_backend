@@ -2,7 +2,7 @@ package esearch
 
 import (
 	"context"
-	"github.com/aalug/job-finder-go/internal/db/sqlc"
+	"github.com/grannnsacker/job-finder-back/internal/db/sqlc"
 	"log"
 	"sync"
 )

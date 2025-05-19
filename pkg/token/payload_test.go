@@ -1,8 +1,8 @@
 package token
 
 import (
-	"github.com/aalug/job-finder-go/pkg/utils"
 	"github.com/google/uuid"
+	"github.com/grannnsacker/job-finder-back/pkg/utils"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"

@@ -2,13 +2,13 @@ package api
 
 import (
 	"fmt"
-	"github.com/aalug/job-finder-go/docs"
-	"github.com/aalug/job-finder-go/internal/config"
-	"github.com/aalug/job-finder-go/internal/db/sqlc"
-	"github.com/aalug/job-finder-go/internal/esearch"
-	"github.com/aalug/job-finder-go/pkg/token"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/grannnsacker/job-finder-back/docs"
+	"github.com/grannnsacker/job-finder-back/internal/config"
+	"github.com/grannnsacker/job-finder-back/internal/db/sqlc"
+	"github.com/grannnsacker/job-finder-back/internal/esearch"
+	"github.com/grannnsacker/job-finder-back/pkg/token"
 	rabbitmq "github.com/streadway/amqp"
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -87,14 +87,10 @@ func (server *Server) setupRouter() {
 	// === users ===
 	routerV1.POST("/users", server.createUser)
 	routerV1.POST("/users/login", server.loginUser)
-	routerV1.GET("/users/verify-email", server.verifyUserEmail)
-	routerV1.GET("/users/send-verification-email", server.sendVerificationEmailToUser)
 
 	// === employers ===
 	routerV1.POST("/employers", server.createEmployer)
 	routerV1.POST("/employers/login", server.loginEmployer)
-	routerV1.GET("/employers/verify-email", server.verifyEmployerEmail)
-	routerV1.GET("/employers/send-verification-email", server.sendVerificationEmailToEmployer)
 
 	routerV1.GET("/employers/employer-company-details/:email", server.getEmployerAndCompanyDetails)
 
