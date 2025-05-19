@@ -8,8 +8,6 @@
 - PostgreSQL
 - Docker
 - Gin Web Framework
-- SQLC
-- JWT для аутентификации
 
 ## Требования
 - Go 1.21 или выше
